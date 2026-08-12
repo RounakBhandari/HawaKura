@@ -46,10 +46,24 @@ io.on("connection", (socket) => {
 		socket.join(room);
 		console.log(`Socket ${socket.id} joined chat room : ${room}`);
 	});
-	
 
-	socket.on("disconnect", () => {
-		console.log("User Disconnected", socket.id);
+	socket.on("typing", (room) => socket.in(room).emit("typing"));
+	socket.on("stop typing", (room) => socket.in(room).emit("stop typing"));
+
+	socket.on("new message", (newsMessageReceived) => {
+		const chat = newsMessageReceived.chatId;
+		if (chat || !chat.users) return console.log("chat.users not defined");
+
+		chat.users.forEach((user) => {
+			if (user._id === newsMessageReceived.sender._id) return;
+
+			socket.in(user._id).emit("message received", newsMessageReceived);
+		});
+	});
+
+	socket.off("setup", () => {
+		console.log("User Disconnected");
+		socket.leave(userData._id);
 	});
 });
 
