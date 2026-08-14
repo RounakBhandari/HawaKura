@@ -39,7 +39,11 @@ export const ChatBox = () => {
               </span>
             </div>
           </div>
+          <div className="flex-1 overflow-hidden">
+            <SingleChat partner={partner} />
+          </div>
         </div>
+        
       ) : (
         /* Empty State */
         <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
