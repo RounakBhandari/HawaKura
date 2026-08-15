@@ -8,7 +8,7 @@ const messageSchema = mongoose.Schema(
 		isTimeCapsule: { type: Boolean, default: false },
 		unlockDate: { type: Date, default: null },
 	},
-	{ timestamp: true },
+	{ timestamps: true },
 );
 
 export default mongoose.model("Message", messageSchema);

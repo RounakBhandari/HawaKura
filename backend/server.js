@@ -34,11 +34,17 @@ app.get("/", (req, res) => {
 	res.send("Hawakura API is running");
 });
 
+const activeUsers = new Map();
 io.on("connection", (socket) => {
 	console.log("A user connected", socket.id);
 
 	socket.on("setup", (userData) => {
+		if (!userData?._id) return;
 		socket.join(userData._id);
+
+		activeUsers.set(socket.id, userData._id);
+		io.emit("active users", Array.from(new Set(activeUsers.values())));
+
 		console.log(`User ${userData.username} joined personal room: ${userData._id}`);
 		socket.emit("connected");
 	});
@@ -53,7 +59,7 @@ io.on("connection", (socket) => {
 
 	socket.on("new message", (newsMessageReceived) => {
 		const chat = newsMessageReceived.chatId;
-		if (chat || !chat.users) return console.log("chat.users not defined");
+		if (!chat || !chat.users) return console.log("chat.users not defined");
 
 		chat.users.forEach((user) => {
 			if (user._id === newsMessageReceived.sender._id) return;
@@ -62,13 +68,15 @@ io.on("connection", (socket) => {
 		});
 	});
 
-	socket.off("setup", () => {
+	socket.on("disconnect", () => {
 		console.log("User Disconnected");
-		socket.leave(userData._id);
+		const userId = activeUsers.get(socket.id);
+		if (userId) {
+			activeUsers.delete(socket.id);
+			io.emit("active users", Array.from(new Set(activeUsers.values())));
+		}
 	});
 });
-
-app.use("/api/users", userRoutes);
 
 const PORT = process.env.PORT || 5000;
 

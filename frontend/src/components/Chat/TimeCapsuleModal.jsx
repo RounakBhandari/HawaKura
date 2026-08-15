@@ -2,14 +2,14 @@ import React, { useState } from 'react'
 
 export const TimeCapsuleModal = ({ isOpen, onClose, onSchedule, partnerName}) => {
 
-    const [data, setDate ] = useState('');
+    const [date, setDate ] = useState('');
     const [time, setTime] = useState('');
 
     if(!isOpen) return null;
     
     const handleConfirm = () =>{
         if(!date || !time) return;
-        const unlockDate = new Date(`${date}T{time}`);
+        const unlockDate = new Date(`${date}T${time}`);
         onSchedule(unlockDate);
         onClose();
     }

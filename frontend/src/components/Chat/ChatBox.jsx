@@ -1,15 +1,18 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useChatState } from '../../context/ChatProvider'
+import { SingleChat } from './SingleChat';
 
 export const ChatBox = () => {
 
     const { selectedChat, user } = useChatState();
-
+    const [onlineUsers, setOnlineUsers] = useState([]);
     const getSender = (loggedUser, users)=>{
-        return users[0]?._id === loggedUser ? users[1] : users[0];
+        return users[0]?._id === loggedUser?._id ? users[1] : users[0];
     }
 
     const partner = selectedChat ? getSender(user, selectedChat.users) : null;
+
+    const isPartnerOnline = partner ? onlineUsers.includes(partner._id) : false;
 
 
    return (
@@ -24,23 +27,28 @@ export const ChatBox = () => {
                 alt={partner?.username}
                 className="w-9 h-9 rounded-full border border-slate-800"
               />
+              {isPartnerOnline && (
+                <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-slate-900 rounded-full"></span>
+              )}
               <div>
                 <h2 className="text-sm font-semibold text-slate-100">{partner?.username}</h2>
-                <p className="text-[10px] text-slate-400">{partner?.email}</p>
+                <span className="text-[10px] text-slate-400">
+                {isPartnerOnline ? 'Online' : 'Offline'}
+              </span>
               </div>
             </div>
           </div>
 
           {/* Message History Feed Placeholder */}
-          <div className="flex-1 p-6 overflow-y-auto space-y-4">
+          {/* <div className="flex-1 p-6 overflow-y-auto ">
             <div className="text-center my-8">
-              <span className="text-xs bg-slate-900 border border-slate-800 text-slate-400 px-3 py-1.5 rounded-full">
-                This is the start of your encrypted conversation with {partner?.username}
-              </span>
+              
+             
             </div>
-          </div>
-          <div className="flex-1 overflow-hidden">
-            <SingleChat partner={partner} />
+          </div> */}
+           <div className="flex-1 overflow-hidden ">
+            
+                <SingleChat partner={partner} />
           </div>
         </div>
         

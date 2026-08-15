@@ -2,13 +2,51 @@ import React, { useState } from 'react'
 import { useChatState } from '../../context/ChatProvider';
 import API from '../../config/api';
 import { useEffect } from 'react';
+import { socket } from '../../config/socket';
 
 export const Sidebar = () => {
     const [search, setSearch] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [loadingSearch, setLoadingSearch ] = useState(false);
     const [ loadingChat, setLoadingChat] = useState(false);
-    const {user, selectedChat, setSelectedChat, chats, setChats, logout} = useChatState();
+    const {user, selectedChat, setSelectedChat, chats, setChats, logout, notification, setNotification} = useChatState();
+
+    useEffect(()=>{
+        if(user){
+            socket.connect();
+            socket.emit('setup', user);
+        }
+        return ()=>{
+            socket.disconnect();
+        }
+    }, [user])
+
+
+    useEffect(()=>{
+        const globalMessageHandler = (newMessageReceived)=>{
+            setChats((prevChats)=>{
+                const updatedChats = prevChats.map((chat)=> chat._id === newMessageReceived.chatId._id ? { ...chat, latestMessage: newMessageReceived}: chat);
+                return updatedChats.sort((a, b) => 
+                    new Date(b.latestMessage?.createdAt || b.createdAt) - new Date(a.latestMessage?.createdAt || a.createdAt)
+                );
+                return updatedChats.sort((a, b) => 
+                    new Date(b.latestMessage?.createdAt || b.createdAt) - new Date(a.latestMessage?.createdAt || a.createdAt)
+                );
+            });
+            if (!selectedChat || selectedChat._id !== newMessageReceived.chatId._id) {
+                setNotification((prev) => {
+                    // Prevent duplicate notifications
+                    if (!prev.some(n => n._id === newMessageReceived._id)) {
+                        return [newMessageReceived, ...prev];
+                    }
+                    return prev;
+                });
+            }
+        }
+        socket.on('message received', globalMessageHandler)
+        return () => socket.off('message received', globalMessageHandler);
+    }, [selectedChat, setChats, setNotification])
+
 
     const fetchChats = async () =>{
         try{
@@ -23,6 +61,8 @@ export const Sidebar = () => {
         fetchChats();
     }, []);
 
+
+  
     const handleSearch = async (query) =>{
         setSearch(query);
         if(!query.trim()){
@@ -54,7 +94,7 @@ export const Sidebar = () => {
             setSearch('');
             setSearchResults([]);
         } catch (error) {
-            console.error('Error Opening chat: ', err);
+            console.error('Error Opening chat: ', error);
             
         }finally {
             setLoadingChat(false);
@@ -143,11 +183,15 @@ export const Sidebar = () => {
           chats.map((chat) => {
             const partner = getSender(user, chat.users);
             const isSelected = selectedChat?._id === chat._id;
+            const unreadMessages = notification.filter((n)=>n.chatId._id === chat._id);
+            const hasUnread = unreadMessages.length > 0;
 
             return (
               <div
                 key={chat._id}
-                onClick={() => setSelectedChat(chat)}
+                onClick={() =>{ setSelectedChat(chat);
+                    setNotification(notification.filter((n)=> n.chatId._id !== chat._id))}
+                }
                 className={`p-3 rounded-2xl cursor-pointer flex items-center gap-3 transition ${
                   isSelected
                     ? 'bg-indigo-600/20 border border-indigo-500/30 text-white'
@@ -163,10 +207,21 @@ export const Sidebar = () => {
                   <div className="flex justify-between items-baseline mb-0.5">
                     <h3 className="text-xs font-semibold truncate text-slate-200">
                       {partner?.username}
+                      
                     </h3>
                   </div>
                   <p className="text-[11px] text-slate-400 truncate">
-                    {chat.latestMessage?.content || 'No messages yet'}
+                   {chat.latestMessage && (
+                <span className={`text-sm truncate ${hasUnread ? "font-bold text-black" : "text-gray-500"}`}>
+                    {hasUnread ?(
+                    <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                        New Message
+                    </span>
+                ) :
+                
+                    <span>{chat.latestMessage.content}</span>}
+                </span>
+            )}
                   </p>
                 </div>
               </div>
