@@ -55,9 +55,18 @@ export const sendMessage = async (req, res) => {
 
 export const getMessages = async (req, res) => {
 	try {
-		const messages = await Message.find({ chatId: req.params.chatId })
-			.populate("sender", "username avatar emails")
-			.populate("chatId");
+		const { chatId } = req.params;
+		const page = parseInt(req.query.page) || 1;
+		const limit = parseInt(req.query.limit) || 20;
+
+		const skip = (page - 1) * limit;
+
+		const messages = await Message.find({ chatId })
+			.populate("sender", "username avatar email")
+			.populate("chatId")
+			.sort({ createdAt: -1 })
+			.skip(skip)
+			.limit(limit);
 		const now = new Date();
 		const sanitizedMessages = messages.map((msg) => {
 			const msgObj = msg.toObject();
@@ -69,7 +78,7 @@ export const getMessages = async (req, res) => {
 				isLocked,
 			};
 		});
-		res.json(sanitizedMessages);
+		res.status(200).json(sanitizedMessages.reverse());
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}

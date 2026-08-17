@@ -11,7 +11,11 @@ export const SingleChat = ({partner}) => {
     const [ messages, setMessages ]  = useState([]);
     const [ newMessage, setNewMessage ] = useState('');
     const [ socketConnected, setSocketConnected ] = useState(false);
-
+    const [ page, setPage ] = useState(1);
+    const [ hasMore, setHasMore ] = useState(true);
+    const [ isLoadingMore, setIsLoadingMore ] = useState(false);
+    const scrollBoxRef = useRef(null);
+    const prevScrollHeightRef = useRef(0);
     const [ isModalOpen, setIsModalOpen ] = useState(false);
     const [ pendingCapsuleMessage, setPendingCapsuleMessage ] = useState('');
 
@@ -32,21 +36,45 @@ export const SingleChat = ({partner}) => {
         };
     }, []);
 
-   useEffect(()=>{
-    const fetchMessages = async () =>{
+     const fetchMessages = async (pageNumber = 1) =>{
         if(!selectedChat) return;
         try {
-            const { data } = await API.get(`/api/messages/${selectedChat._id}`);
-            setMessages(data);
-            
-            // Use optional chaining so it doesn't crash if socket isn't ready yet
+          if(pageNumber >1 ) setIsLoadingMore(true);
+
+            const { data } = await API.get(`/api/messages/${selectedChat._id}?page=${pageNumber}&limit=20`);
+            if(data.length < 20){
+              setHasMore(false);
+            }
+            if(pageNumber ===1){
+              
+              setMessages(data);
+            }else{
+              setMessages((prevMessages)=> [...data, ...prevMessages]);
+            }
+
             socket?.emit('join chat', selectedChat._id);
         } catch (error) {
             console.error('Failed to fetch messages: ', error);
+        }finally{
+          setIsLoadingMore(false);
         }
     }
+   useEffect(()=>{
+    setPage(1);
+    setHasMore(true);
+    setMessages([]);
     fetchMessages();
 }, [selectedChat]);
+
+const handleScroll = async (e) =>{
+  if(e.target.scrollTop === 0 && hasMore && !isLoadingMore){
+    prevScrollHeightRef.current = e.target.scrollHeight;
+
+    const nextPage = page + 1;
+    setPage(nextPage);
+    await fetchMessages(nextPage);
+  }
+}
 
 //     useEffect(() => {
 //     const messageHandler = (newMessageReceived) => {
@@ -94,7 +122,13 @@ useEffect(() => {
     }, [selectedChat]);
 
     useEffect(()=>{
+      if(page === 1){
         scrollToBottom();
+      }
+      else if(scrollBoxRef.current){
+        const currentScrollHeight = scrollBoxRef.current.scrollHeight;
+        scrollBoxRef.current.scrollTop = currentScrollHeight - prevScrollHeightRef.current;
+      }
     }, [messages]);
 
     const typingHandler = (e) =>{
@@ -164,7 +198,17 @@ useEffect(() => {
   return (
     <div className="flex flex-col h-full bg-slate-950/50 relative">
       {/* Messages Feed */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div 
+        ref={scrollBoxRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto p-4 space-y-4"
+      >
+        {isLoadingMore && (
+          <div className="text-center text-xs text-slate-400 py-2 animate-pulse">
+            Loading older messages...
+        </div>
+        )}    
+
         <span className="text-xs text-slate-400 px-3 py-1.5 mx-auto">
                 This is the start of your encrypted conversation with {partner?.username}
               </span>

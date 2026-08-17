@@ -9,18 +9,37 @@ export const Sidebar = () => {
     const [searchResults, setSearchResults] = useState([]);
     const [loadingSearch, setLoadingSearch ] = useState(false);
     const [ loadingChat, setLoadingChat] = useState(false);
-    const {user, selectedChat, setSelectedChat, chats, setChats, logout, notification, setNotification} = useChatState();
+    const {user, selectedChat, setSelectedChat, chats, setChats, logout, notification, setNotification, activeUsers, setActiveUsers} = useChatState();
 
     useEffect(()=>{
         if(user){
             socket.connect();
+
+            const onConnect = () =>{
             socket.emit('setup', user);
-        }
+            }
+        
+        socket.on('connect', onConnect);
+
+        socket.emit('setup', user);
+
         return ()=>{
-            socket.disconnect();
+          socket.off('connect', onConnect);
+          socket.disconnect();
         }
+      }
     }, [user])
 
+
+    useEffect(() => {
+        socket.on("active users", (users) => {
+        setActiveUsers(users);
+    });
+
+    return () => socket.off("active users");
+    }, [setActiveUsers]);
+
+    const isUserActive = (userId) => activeUsers.includes(userId);
 
     useEffect(()=>{
         const globalMessageHandler = (newMessageReceived)=>{
@@ -185,7 +204,7 @@ export const Sidebar = () => {
             const isSelected = selectedChat?._id === chat._id;
             const unreadMessages = notification.filter((n)=>n.chatId._id === chat._id);
             const hasUnread = unreadMessages.length > 0;
-
+            const isOnline = isUserActive(partner?._id);
             return (
               <div
                 key={chat._id}
@@ -198,17 +217,22 @@ export const Sidebar = () => {
                     : 'hover:bg-slate-800/50 text-slate-300 border border-transparent'
                 }`}
               >
+             
                 <img
                   src={partner?.avatar}
                   alt={partner?.username}
                   className="w-10 h-10 rounded-full border border-slate-800"
                 />
+              
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-baseline mb-0.5">
                     <h3 className="text-xs font-semibold truncate text-slate-200">
                       {partner?.username}
                       
                     </h3>
+                    <span className="text-[10px] text-slate-500">
+                      {isOnline ? "Online" : "Offline"}
+                    </span>
                   </div>
                   <p className="text-[11px] text-slate-400 truncate">
                    {chat.latestMessage && (
