@@ -68,6 +68,16 @@ io.on("connection", (socket) => {
 		});
 	});
 
+	socket.on("message deleted", (deletedData) => {
+		const chat = deletedData.chatId;
+		if (!chat || !chat.users) return;
+
+		chat.users.forEach((user) => {
+			if (user._id === deletedData.senderId) return;
+
+			socket.in(user._id).emit("remove message", deletedData.messageId);
+		});
+	});
 	socket.on("disconnect", () => {
 		console.log("User Disconnected");
 		const userId = activeUsers.get(socket.id);

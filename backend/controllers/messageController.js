@@ -83,3 +83,27 @@ export const getMessages = async (req, res) => {
 		res.status(500).json({ message: error.message });
 	}
 };
+
+export const unsendMessage = async (req, res) => {
+	try {
+		const message = await Message.findById(req.params.messageId);
+		if (!message) {
+			return res.status(404).json({ message: "Message not found" });
+		}
+
+		if (message.sender.toString() !== req.user._id.toString()) {
+			return res.status(403).json({ message: "You can only unsend your own messages" });
+		}
+
+		const timeDiff = Date.now() - new Date(message.createdAt).getTime();
+		if (timeDiff > 300000) {
+			return res.status(400).json({ message: "You can only unsend messages within 5 minutes of sending" });
+		}
+
+		await Message.findByIdAndDelete(req.params.messageId);
+
+		res.status(200).json({ success: true, messageId: req.params.messageId });
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};

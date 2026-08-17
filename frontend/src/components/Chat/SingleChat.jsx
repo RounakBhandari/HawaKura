@@ -19,12 +19,32 @@ export const SingleChat = ({partner}) => {
     const [ isModalOpen, setIsModalOpen ] = useState(false);
     const [ pendingCapsuleMessage, setPendingCapsuleMessage ] = useState('');
 
+    const [ openMenuId, setOpenMenuId ] = useState(null);
     const [ typing, setTyping ] = useState(false);
     const [ isPartnerTyping, setIsPartnerTyping ] = useState(false);
     const messageEndRef = useRef(null);
     const scrollToBottom = () =>{
         messageEndRef.current?.scrollIntoView({behavior: 'smooth'});
     }
+
+const handleUnsend = async (messageId) =>{
+  try {
+    await API.delete(`/api/messages/${messageId}`);
+
+    setMessages((prev)=>prev.filter((m)=> m._id !== messageId));
+
+    socket.emit("message deleted", {
+      messageId: messageId,
+      chatId: selectedChat, 
+      senderId: user._id
+    });
+
+    setOpenMenuId(null);
+  } catch (error) {
+        console.error("Failed to unsend message", error);
+        alert(error.response?.data?.message || "Could not unsend message");
+  }
+}
 
  useEffect(() => {
         socket.on('typing', () => setIsPartnerTyping(true));
@@ -76,37 +96,7 @@ const handleScroll = async (e) =>{
   }
 }
 
-//     useEffect(() => {
-//     const messageHandler = (newMessageReceived) => {
-//         if (!selectedChat || selectedChat._id !== newMessageReceived.chatId._id) {
-//             // Use functional state update to prevent stale data
-//             setNotification((prev) => {
-//                 // Prevent duplicate notifications for the same message
-//                 if (!prev.some(n => n._id === newMessageReceived._id)) {
-//                     return [newMessageReceived, ...prev];
-//                 }
-//                 return prev;
-//             });
-//         } else {
-//             setMessages((prevMessages) => [...prevMessages, newMessageReceived]);
-//         }
 
-//         setChats((prevChats) => {
-//             const updatedChats = prevChats.map((chat) =>
-//                 chat._id === newMessageReceived.chatId._id ? { ...chat, latestMessage: newMessageReceived } : chat
-//             );
-//             return updatedChats.sort((a, b) => {
-//                 const dateA = new Date(a.latestMessage?.createdAt || a.createdAt);
-//                 const dateB = new Date(b.latestMessage?.createdAt || b.createdAt);
-//                 return dateB - dateA;
-//             });
-//         });
-//     };
-
-//     socket.on('message received', messageHandler);
-    
-//     return () => socket.off('message received', messageHandler);
-// }, [selectedChat]); 
 
 useEffect(() => {
         const activeChatHandler = (newMessageReceived) => {
@@ -115,10 +105,16 @@ useEffect(() => {
                 setMessages((prevMessages) => [...prevMessages, newMessageReceived]);
             }
         };
-
+        const messageRemovedHandler = (deletedMessgaeId) =>{
+          setMessages((prevMessages)=> prevMessages.filter(m => m._id !== deletedMessgaeId));
+        }
         socket.on('message received', activeChatHandler);
+        socket.on('remove message', messageRemovedHandler);
         
-        return () => socket.off('message received', activeChatHandler);
+        return () => {
+          socket.off('message received', activeChatHandler);
+          socket.off('remove message', messageRemovedHandler);
+        }
     }, [selectedChat]);
 
     useEffect(()=>{
@@ -213,31 +209,61 @@ useEffect(() => {
                 This is the start of your encrypted conversation with {partner?.username}
               </span>
         {messages.map((m) => {
-          const isSender = m.sender._id === user._id;
-          const isLocked = m.isTimeCapsule && new Date(m.unlockDate) > new Date();
+    const isMyMessage = m.sender._id === user._id;
+    // Check if the message is less than 5 minutes old
+    const isWithin5Mins = (new Date() - new Date(m.createdAt)) < 300000;
 
-          return (
-            <div key={m._id} className={`flex ${isSender ? 'justify-end' : 'justify-start'}`}>
-              <div
-                className={`max-w-[70%] px-4 py-2 rounded-2xl text-sm ${
-                  isLocked
-                    ? 'bg-slate-900 border border-slate-700 text-slate-500 italic'
-                    : isSender
-                    ? 'bg-indigo-600 text-white rounded-br-none shadow-lg shadow-indigo-600/20'
-                    : 'bg-slate-800 text-slate-200 rounded-bl-none border border-slate-700'
-                }`}
-              >
-                {isLocked ? (
-                  <span className="flex items-center gap-2 text-xs font-medium">
-                    <span className="animate-pulse">🔒</span> Locked until {new Date(m.unlockDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                ) : (
-                  m.content
+    return (
+        <div key={m._id} className={`flex ${isMyMessage ? "justify-end" : "justify-start"}`}>
+            
+            <div className="flex items-center gap-2 group">
+                
+                {/* 3 DOT MENU (Only renders on the LEFT of MY messages) */}
+                {isMyMessage && (
+                    <div className="relative opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                            onClick={() => setOpenMenuId(openMenuId === m._id ? null : m._id)}
+                            className="p-1 text-slate-400 hover:text-slate-200 rounded-full hover:bg-slate-800"
+                        >
+                            {/* Vertical dots SVG */}
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+                                <path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/>
+                            </svg>
+                        </button>
+
+                        {/* Dropdown Menu */}
+                        {openMenuId === m._id && (
+                            <div className="absolute right-6 top-0 bg-slate-800 border border-slate-700 shadow-xl rounded-lg py-1 z-10 w-24">
+                                {isWithin5Mins ? (
+                                    <button 
+                                        onClick={() => handleUnsend(m._id)}
+                                        className="w-full text-left px-3 py-1 text-xs text-rose-400 hover:bg-slate-700"
+                                    >
+                                        Unsend
+                                    </button>
+                                ) : (
+                                    <div className="px-3 py-1 text-[10px] text-slate-500 text-center">
+                                        Too late to unsend
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 )}
-              </div>
+
+                {/* THE ACTUAL MESSAGE BUBBLE */}
+                <div className={`px-4 py-2 rounded-2xl max-w-sm ${
+                    isMyMessage 
+                        ? "bg-indigo-600 text-white rounded-br-none" 
+                        : "bg-slate-800 text-slate-200 rounded-bl-none"
+                }`}>
+                    <p className="text-sm">{m.content}</p>
+                </div>
+                
             </div>
-          );
-        })}
+        </div>
+    );
+})}
         {isPartnerTyping && (
           <div className="flex justify-start">
             <div className="bg-slate-800 text-slate-400 px-4 py-3 rounded-2xl rounded-bl-none border border-slate-700 flex items-center gap-1 w-fit">
